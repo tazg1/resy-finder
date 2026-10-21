@@ -2,7 +2,8 @@ name: Resy finder
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # every 30 minutes (GitHub may start runs a few minutes late)
+    # Every 30 minutes, off the hour: GitHub delays or drops many runs set for :00 and :30
+    - cron: "17,47 * * * *"
   workflow_dispatch:         # adds a "Run workflow" button on the Actions tab
     inputs:
       mode:
