@@ -1,0 +1,99 @@
+"""One check for a Resy table, run by GitHub Actions every 30 minutes.
+
+Each run:
+  1. Looks for open tables on your days and times, and alerts your phone about
+     any it hasn't told you about before (remembered in seen.json).
+  2. If the next date is released within the next 75 minutes, waits for it and
+     checks every 10 seconds right after the release.
+
+What to look for is set in settings.json. Alerts go to the ntfy topic in the
+NTFY_TOPIC secret.
+
+    python cloud_check.py        # a normal check
+    python cloud_check.py test   # just send a test alert
+"""
+
+import json
+import os
+import sys
+from datetime import datetime, timedelta
+
+import resy_finder as r
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_FILE = os.path.join(HERE, "settings.json")
+SEEN_FILE = os.path.join(HERE, "seen.json")
+LOOKAHEAD = timedelta(minutes=75)  # runs are every 30 min, and GitHub sometimes starts them late
+
+
+def load_settings():
+    with open(SETTINGS_FILE) as f:
+        s = json.load(f)
+    r.PARTY_SIZE = s["party_size"]
+    r.DAYS = s["days"]
+    r.EARLIEST = r.parse_clock(s["earliest"])
+    r.LATEST = r.parse_clock(s["latest"])
+    return s
+
+
+def find_venue(name):
+    hits = r.search_restaurants(name)
+    if not hits:
+        sys.exit(f"No restaurant on Resy matches '{name}'. Check the name in settings.json.")
+    exact = [h for h in hits if h["name"].lower() == name.lower()]
+    venue = (exact or hits)[0]
+    print(f"Restaurant: {venue['name']} ({venue.get('neighborhood', '')})")
+    return venue
+
+
+def load_seen():
+    try:
+        with open(SEEN_FILE) as f:
+            return set(json.load(f))
+    except (OSError, ValueError):
+        return set()
+
+
+def main():
+    if not os.environ.get("NTFY_TOPIC"):
+        sys.exit("The NTFY_TOPIC secret isn't set. Add it in GitHub: Settings > Secrets and variables > Actions.")
+
+    if sys.argv[1:] == ["test"]:
+        ok = r.alert("Resy finder", "Cloud alerts are working. You'll get one here when a table opens up.")
+        sys.exit(0 if ok else "Test alert failed.")
+
+    settings = load_settings()
+    venue = find_venue(settings["restaurant"])
+    seen = load_seen()
+
+    try:
+        # 1. Anything open right now that we haven't already alerted about?
+        tables = r.find_tables(venue)
+        new = [t for t in tables if t["link"] + t["when"] not in seen]
+        if new:
+            r.show_tables(venue, new)
+            r.alert_tables(venue, new)
+            seen.update(t["link"] + t["when"] for t in new)
+        else:
+            print(f"Nothing new ({len(tables)} open table(s) already alerted)." if tables else "No tables right now.")
+
+        # 2. Is the next date about to be released?
+        plan = r.share_tips(venue, settings.get("release_time_et"))
+        if not plan["release"]:
+            print("Release time unknown. Set release_time_et in settings.json to check at release.")
+            return
+        at = r.eastern_to_local(plan["opens"], plan["release"])
+        now = datetime.now().astimezone()
+        if at - LOOKAHEAD <= now < at + r.TRY_FOR:
+            found = r.try_at_release(venue, plan["day"], at)
+            seen.update(t["link"] + t["when"] for t in found)
+        else:
+            print(f"Next release: {plan['day']:%a %b %d} opens {plan['opens']:%a %b %d} at "
+                  f"{plan['release']:%I:%M %p} ET. Not soon, so done.")
+    finally:
+        with open(SEEN_FILE, "w") as f:
+            json.dump(sorted(seen), f)
+
+
+if __name__ == "__main__":
+    main()

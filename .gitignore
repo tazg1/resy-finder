@@ -1,0 +1,5 @@
+# Personal settings (ntfy topic, phone number) stay on this computer
+resy_config.json
+seen.json
+__pycache__/
+*.log

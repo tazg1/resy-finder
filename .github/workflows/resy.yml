@@ -1,0 +1,46 @@
+name: Resy finder
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # every 30 minutes (GitHub may start runs a few minutes late)
+  workflow_dispatch:         # adds a "Run workflow" button on the Actions tab
+    inputs:
+      mode:
+        description: "auto = normal check, test = send a test alert to your phone"
+        type: choice
+        options: [auto, test]
+        default: auto
+
+# One run at a time, so a run waiting for a release isn't doubled up
+concurrency:
+  group: resy-finder
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # seen.json remembers which tables we've already alerted about
+      - uses: actions/cache/restore@v4
+        with:
+          path: seen.json
+          key: seen-${{ github.run_id }}
+          restore-keys: seen-
+
+      - name: Check Resy
+        run: python cloud_check.py ${{ inputs.mode == 'test' && 'test' || '' }}
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('seen.json') != ''
+        with:
+          path: seen.json
+          key: seen-${{ github.run_id }}
