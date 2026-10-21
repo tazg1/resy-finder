@@ -18,7 +18,7 @@ Edit `settings.json` on GitHub (pencil icon, then **Commit changes**):
   "party_size": 2,
   "days": ["Thursday", "Friday", "Saturday"],
   "earliest": "6:00 PM",
-  "latest": "7:30 PM"
+  "latest": "8:00 PM"
 }
 ```
 
