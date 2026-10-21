@@ -1,10 +1,10 @@
 """One check for a Resy table, run by GitHub Actions every 30 minutes.
 
-Each run:
+Each run, for every restaurant in settings.json:
   1. Looks for open tables on your days and times, and alerts your phone about
      any it hasn't told you about before (remembered in seen.json).
   2. If the next date is released within the next 75 minutes, waits for it and
-     checks every 10 seconds right after the release.
+     checks every few seconds right after the release (earliest release first).
 
 What to look for is set in settings.json. Alerts go to the ntfy topic in the
 NTFY_TOPIC secret.
@@ -63,33 +63,39 @@ def main():
         sys.exit(0 if ok else "Test alert failed.")
 
     settings = load_settings()
-    venue = find_venue(settings["restaurant"])
     seen = load_seen()
 
     try:
         # 1. Anything open right now that we haven't already alerted about?
-        tables = r.find_tables(venue)
-        new = [t for t in tables if t["link"] + t["when"] not in seen]
-        if new:
-            r.show_tables(venue, new)
-            r.alert_tables(venue, new)
-            seen.update(t["link"] + t["when"] for t in new)
-        else:
-            print(f"Nothing new ({len(tables)} open table(s) already alerted)." if tables else "No tables right now.")
+        releases = []
+        for spot in settings["restaurants"]:
+            print()
+            venue = find_venue(spot["name"])
+            tables = r.find_tables(venue)
+            new = [t for t in tables if t["link"] + t["when"] not in seen]
+            if new:
+                r.show_tables(venue, new)
+                r.alert_tables(venue, new)
+                seen.update(t["link"] + t["when"] for t in new)
+            else:
+                print(f"Nothing new ({len(tables)} open table(s) already alerted)." if tables else "No tables right now.")
 
-        # 2. Is the next date about to be released?
-        plan = r.share_tips(venue, settings.get("release_time_et"))
-        if not plan["release"]:
-            print("Release time unknown. Set release_time_et in settings.json to check at release.")
-            return
-        at = r.eastern_to_local(plan["opens"], plan["release"])
-        now = datetime.now().astimezone()
-        if at - LOOKAHEAD <= now < at + r.TRY_FOR:
-            found = r.try_at_release(venue, plan["day"], at)
-            seen.update(t["link"] + t["when"] for t in found)
-        else:
-            print(f"Next release: {plan['day']:%a %b %d} opens {plan['opens']:%a %b %d} at "
-                  f"{plan['release']:%I:%M %p} ET. Not soon, so done.")
+            plan = r.share_tips(venue, spot.get("release_time_et"))
+            if plan["release"]:
+                releases.append((r.eastern_to_local(plan["opens"], plan["release"]), venue, plan))
+            else:
+                print(f"Release time unknown for {venue['name']}. Set release_time_et in settings.json.")
+
+        # 2. Is a next date about to be released? Earliest first.
+        for at, venue, plan in sorted(releases, key=lambda x: x[0]):
+            now = datetime.now().astimezone()
+            if at - LOOKAHEAD <= now < at + r.TRY_FOR:
+                print(f"\n{venue['name']}:")
+                found = r.try_at_release(venue, plan["day"], at)
+                seen.update(t["link"] + t["when"] for t in found)
+            else:
+                print(f"{venue['name']} next release: {plan['day']:%a %b %d} opens {plan['opens']:%a %b %d} at "
+                      f"{plan['release']:%I:%M %p} ET. Not soon.")
     finally:
         with open(SEEN_FILE, "w") as f:
             json.dump(sorted(seen), f)

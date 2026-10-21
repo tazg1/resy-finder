@@ -11,16 +11,18 @@ Edit `settings.json` on GitHub (pencil icon, then **Commit changes**):
 
 ```json
 {
-  "restaurant": "Bungalow",
+  "restaurants": [
+    {"name": "Bungalow", "release_time_et": "11:00 AM"},
+    {"name": "Lilia", "release_time_et": ""}
+  ],
   "party_size": 2,
   "days": ["Thursday", "Friday", "Saturday"],
   "earliest": "6:00 PM",
-  "latest": "7:30 PM",
-  "release_time_et": "11:00 AM"
+  "latest": "7:30 PM"
 }
 ```
 
-`release_time_et` is when the restaurant releases new dates, in New York time. Leave it as `""` to use the time from Resy's guide, if there is one.
+`release_time_et` is when the restaurant releases new dates, in New York time. Leave it as `""` to use the time from Resy's guide, if there is one. How many days ahead dates open is worked out from Resy's live calendar.
 
 ## Set up
 

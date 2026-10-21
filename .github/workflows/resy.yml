@@ -19,7 +19,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180  # one run may wait through two releases (e.g. 10 and 11 AM)
     steps:
       - uses: actions/checkout@v4
 

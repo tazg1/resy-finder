@@ -1,8 +1,10 @@
 {
-  "restaurant": "Bungalow",
+  "restaurants": [
+    {"name": "Bungalow", "release_time_et": "11:00 AM"},
+    {"name": "Lilia", "release_time_et": ""}
+  ],
   "party_size": 2,
   "days": ["Thursday", "Friday", "Saturday"],
   "earliest": "6:00 PM",
-  "latest": "7:30 PM",
-  "release_time_et": "11:00 AM"
+  "latest": "7:30 PM"
 }

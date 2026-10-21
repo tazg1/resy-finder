@@ -339,12 +339,12 @@ def share_tips(venue, release_override=None):
     last_day = date.fromisoformat(cal["last_calendar_day"])
     calendar_days = (last_day - today).days
 
-    if stated_days and abs(stated_days - calendar_days) <= 2:
-        window = stated_days
-    elif release and now.time() < release:
-        window = calendar_days + 1  # today's release hasn't happened yet, so the calendar is a day short
+    # The live calendar beats a guide that may be years old. Before today's release
+    # time, the calendar is a day short, so add one back.
+    if release:
+        window = calendar_days + (1 if now.time() < release else 0)
     else:
-        window = calendar_days
+        window = stated_days or calendar_days
 
     def already_released(day):
         opens = day - timedelta(days=window)
@@ -358,9 +358,9 @@ def share_tips(venue, release_override=None):
     print("\nWhen to try:")
     at = f" at {release:%I:%M %p} ET" if release else ""
     print(f"  - Tables open {window} days ahead{at}. Resy's calendar is open through {last_day:%a %b %d}.")
-    if stated_days and abs(stated_days - calendar_days) > 2:
-        print(f"  - Note: the tips above say {stated_days} days, but the live calendar is open "
-              f"{calendar_days} days ahead. Going by the calendar; check the Resy page.")
+    if stated_days and stated_days != window:
+        print(f"  - Note: the tips above say {stated_days} days, but Resy's live calendar points to "
+              f"{window}. Going by the calendar.")
     when = {today: "TODAY, ", today + timedelta(days=1): "tomorrow, "}.get(opens, "")
     print(f"  - Next {'/'.join(d[:3] for d in DAYS)} date to open: {next_day:%a %b %d}. "
           f"Expect it {when}{opens:%a %b %d}{at or ' (release time not listed)'}.")
