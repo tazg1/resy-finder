@@ -3,8 +3,9 @@
 Each run, for every restaurant in settings.json:
   1. Looks for open tables on your days and times, and alerts your phone about
      any it hasn't told you about before (remembered in seen.json).
-  2. If the next date is released within the next 75 minutes, waits for it and
-     checks every few seconds right after the release (earliest release first).
+  2. If the next date is released within the next 75 minutes, sends a heads-up
+     alert 10 minutes before, then checks every few seconds right after the
+     release (earliest release first).
 
 What to look for is set in settings.json. Alerts go to the ntfy topic in the
 NTFY_TOPIC secret.
@@ -16,6 +17,7 @@ NTFY_TOPIC secret.
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
 
 import resy_finder as r
@@ -24,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(HERE, "settings.json")
 SEEN_FILE = os.path.join(HERE, "seen.json")
 LOOKAHEAD = timedelta(minutes=75)  # runs are every 30 min, and GitHub sometimes starts them late
+HEADS_UP = timedelta(minutes=10)   # how long before a release to tell you to open Resy
 
 
 def load_settings():
@@ -52,6 +55,26 @@ def load_seen():
             return set(json.load(f))
     except (OSError, ValueError):
         return set()
+
+
+def heads_up(venue, plan, at, seen):
+    """Alert your phone shortly before a release, so you can be ready to book by hand."""
+    key = f"heads-up {venue['name']} {plan['day']}"
+    if key in seen:
+        return
+    wait = (at - HEADS_UP - datetime.now().astimezone()).total_seconds()
+    if wait > 0:
+        print(f"Heads-up alert at {at - HEADS_UP:%I:%M %p}...")
+        time.sleep(wait)
+    minutes = round((at - datetime.now().astimezone()).total_seconds() / 60)
+    if minutes < 1:
+        return  # too late to be useful
+    if r.alert(f"{venue['name']}: drop in {minutes} min",
+               f"{plan['day']:%a %b %d} opens at {plan['release']:%I:%M %p} ET. "
+               f"Open Resy, log in, and book right at the drop.",
+               r.booking_link(venue, plan["day"].isoformat())):
+        print("Heads-up alert sent.")
+        seen.add(key)
 
 
 def main():
@@ -91,6 +114,7 @@ def main():
             now = datetime.now().astimezone()
             if at - LOOKAHEAD <= now < at + r.TRY_FOR:
                 print(f"\n{venue['name']}:")
+                heads_up(venue, plan, at, seen)
                 found = r.try_at_release(venue, plan["day"], at)
                 seen.update(t["link"] + t["when"] for t in found)
             else:

@@ -379,6 +379,12 @@ def share_tips(venue, release_override=None):
 
 # ---- Finding tables ----
 
+def booking_link(venue, day):
+    """The restaurant's Resy page for one date (YYYY-MM-DD)."""
+    return (f"https://resy.com/cities/{venue['location']['url_slug']}"
+            f"/venues/{venue['url_slug']}?date={day}&seats={PARTY_SIZE}")
+
+
 def slots_on(venue, day):
     """Every open table on one date (YYYY-MM-DD), at any time of day."""
     res = call("/4/find", {
@@ -389,8 +395,7 @@ def slots_on(venue, day):
     return [{
         "start": datetime.strptime(slot["date"]["start"], "%Y-%m-%d %H:%M:%S"),
         "table": slot["config"]["type"],
-        "link": f"https://resy.com/cities/{venue['location']['url_slug']}"
-                f"/venues/{venue['url_slug']}?date={day}&seats={PARTY_SIZE}",
+        "link": booking_link(venue, day),
     } for slot in (venues[0]["slots"] if venues else [])]
 
 

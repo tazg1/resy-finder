@@ -1,7 +1,8 @@
 {
   "restaurants": [
     {"name": "Bungalow", "release_time_et": "11:00 AM"},
-    {"name": "Lilia", "release_time_et": ""}
+    {"name": "Lilia", "release_time_et": ""},
+    {"name": "The Four Horsemen", "release_time_et": ""}
   ],
   "party_size": 2,
   "days": ["Thursday", "Friday", "Saturday"],

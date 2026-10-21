@@ -2,7 +2,7 @@
 
 Checks Resy for a table and pushes an alert to your phone (via the free [ntfy](https://ntfy.sh) app) when one opens up.
 
-- **In the cloud:** GitHub Actions runs `cloud_check.py` every 30 minutes. It alerts you about new openings, and around release time (for example 11:00 AM ET) it checks every 10 seconds.
+- **In the cloud:** GitHub Actions runs `cloud_check.py` every 30 minutes. It alerts you about new openings. Before a release (for example 11:00 AM ET) it sends a 10-minute heads-up, then checks every few seconds right after the drop.
 - **On your computer:** `py resy_finder.py` asks for a restaurant, shares booking tips, and searches.
 
 ## Change what it looks for
@@ -13,7 +13,8 @@ Edit `settings.json` on GitHub (pencil icon, then **Commit changes**):
 {
   "restaurants": [
     {"name": "Bungalow", "release_time_et": "11:00 AM"},
-    {"name": "Lilia", "release_time_et": ""}
+    {"name": "Lilia", "release_time_et": ""},
+    {"name": "The Four Horsemen", "release_time_et": ""}
   ],
   "party_size": 2,
   "days": ["Thursday", "Friday", "Saturday"],
