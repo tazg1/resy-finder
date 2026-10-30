@@ -28,6 +28,15 @@ SEEN_FILE = os.path.join(HERE, "seen.json")
 LOOKAHEAD = timedelta(minutes=75)  # runs are every 30 min, and GitHub sometimes starts them late
 HEADS_UP = timedelta(minutes=10)   # how long before a release to tell you to open Resy
 
+# Resy sometimes refuses a request (rate limit, timeout, server error). One failed
+# step shouldn't stop the rest, so these are reported and skipped.
+RESY_ERRORS = (OSError, LookupError, ValueError)  # OSError covers HTTP errors and timeouts
+
+
+def warn(message):
+    """Print a warning that also shows on the run's GitHub page, even when signed out."""
+    print(f"::warning::{message}")
+
 
 def load_settings():
     with open(SETTINGS_FILE) as f:
@@ -42,7 +51,7 @@ def load_settings():
 def find_venue(name):
     hits = r.search_restaurants(name)
     if not hits:
-        sys.exit(f"No restaurant on Resy matches '{name}'. Check the name in settings.json.")
+        raise LookupError(f"No restaurant on Resy matches '{name}'. Check the name in settings.json.")
     exact = [h for h in hits if h["name"].lower() == name.lower()]
     venue = (exact or hits)[0]
     print(f"Restaurant: {venue['name']} ({venue.get('neighborhood', '')})")
@@ -88,22 +97,40 @@ def main():
     settings = load_settings()
     seen = load_seen()
 
+    worked = failed = 0
     try:
         # 1. Anything open right now that we haven't already alerted about?
         releases = []
         for spot in settings["restaurants"]:
             print()
-            venue = find_venue(spot["name"])
-            tables = r.find_tables(venue)
-            new = [t for t in tables if t["link"] + t["when"] not in seen]
-            if new:
-                r.show_tables(venue, new)
-                r.alert_tables(venue, new)
-                seen.update(t["link"] + t["when"] for t in new)
-            else:
-                print(f"Nothing new ({len(tables)} open table(s) already alerted)." if tables else "No tables right now.")
+            try:
+                venue = find_venue(spot["name"])
+            except RESY_ERRORS as e:
+                failed += 1
+                warn(f"Couldn't look up {spot['name']} on Resy: {e}")
+                continue
 
-            plan = r.share_tips(venue, spot.get("release_time_et"))
+            try:
+                tables = r.find_tables(venue)
+                worked += 1
+                new = [t for t in tables if t["link"] + t["when"] not in seen]
+                if new:
+                    r.show_tables(venue, new)
+                    r.alert_tables(venue, new)
+                    seen.update(t["link"] + t["when"] for t in new)
+                else:
+                    print(f"Nothing new ({len(tables)} open table(s) already alerted)." if tables else "No tables right now.")
+            except RESY_ERRORS as e:
+                failed += 1
+                warn(f"Couldn't check tables at {venue['name']}: {e}")
+
+            try:
+                plan = r.share_tips(venue, spot.get("release_time_et"))
+                worked += 1
+            except RESY_ERRORS as e:
+                failed += 1
+                warn(f"Couldn't work out {venue['name']}'s next release: {e}")
+                continue
             if plan["release"]:
                 releases.append((r.eastern_to_local(plan["opens"], plan["release"]), venue, plan))
             else:
@@ -123,6 +150,10 @@ def main():
     finally:
         with open(SEEN_FILE, "w") as f:
             json.dump(sorted(seen), f)
+
+    # A hiccup or two is normal. Only mark the run failed if Resy couldn't be reached at all.
+    if failed and not worked:
+        sys.exit("Every Resy check failed. See the warnings above.")
 
 
 if __name__ == "__main__":
